@@ -33,6 +33,7 @@
                 <p>Driver</p>
                 <input type="text" id="driver">
             </div>
+
         </form>
     </div>
     <div id="mapid"></div>
@@ -67,19 +68,44 @@
             ],
             router: L.Routing.osrmv1({
                 serviceUrl: 'https://router.project-osrm.org/route/v1'
-            })
+            }),
+            createMarker: function() {
+                return null;
+            },
+            lineOptions: {
+                styles: [{
+                    color: 'red',
+                    weight: 3
+                }]
+            },
+            addWaypoints: false,
+            draggableWaypoints: false
         }).addTo(mymap);
+
+
 
 
         // Add the base layer group to the map
         L.control.layers(baseLayers).addTo(mymap);
 
+
+
         var marker = L.marker([-1.9550957139944252, 30.096697180904407], {
-            draggable: true
+            draggable: false,
         }).addTo(mymap);
+
+
+        var dropoffIcon = L.icon({
+            iconUrl: 'marker-red.png',
+            iconSize: [31, 38],
+            iconAnchor: [10, 19]
+        });
+
         var dropoffMarker = L.marker([-1.9524, 30.0594], {
-            draggable: true
+            draggable: false,
+            icon: dropoffIcon
         }).addTo(mymap);
+
 
         marker.on('dragend', function(event) {
             updateMarkerLocation(event.target);
@@ -99,15 +125,21 @@
         const urlParams = new URLSearchParams(window.location.search);
         const pickup = urlParams.get('pickup');
         const dropoff = urlParams.get('dropoff');
+        const driver = urlParams.get('driver');
 
         function updateMarkerLocation(marker, location) {
-            var latlng = marker.getLatLng();
+            var latlng;
+            if (location) {
+                latlng = L.latLng(location.split(','));
+            } else {
+                latlng = marker.getLatLng();
+            }
             var lat = latlng.lat;
             var lng = latlng.lng;
 
-
             var url = new URL(window.location.href);
             url.searchParams.set('pickup', lat + ',' + lng);
+            url.searchParams.set('driver', document.getElementById("driver").value); // Add the driver to the URL parameters
 
             fetch("https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=" + lat + "&lon=" + lng)
                 .then(function(response) {
@@ -118,20 +150,125 @@
                     document.getElementById("pickup").value = name;
                     history.pushState(null, null, url.toString());
                 });
-            if (pickup && dropoff) {
-                const pickupLatLng = L.latLng(pickup.split(','));
-                const dropoffLatLng = L.latLng(dropoff.split(','));
 
-                marker.setLatLng(pickupLatLng);
+            marker.setLatLng(latlng);
+
+            if (url.searchParams.has('pickup') && url.searchParams.has('dropoff')) {
+                const dropoffLatLng = L.latLng(url.searchParams.get('dropoff').split(','));
                 dropoffMarker.setLatLng(dropoffLatLng);
 
-                routingControl.setWaypoints([pickupLatLng, dropoffLatLng]);
+                routingControl.setWaypoints([latlng, dropoffLatLng]);
             }
 
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    var latlng = L.latLng(position.coords.latitude, position.coords.longitude);
+                    // userMarker.setLatLng(latlng);
+                    mymap.setView(latlng, 16);
+                }, function(error) {
+                    console.error(error);
+                });
+            } else {
+                console.error('Geolocation is not supported by this browser.');
+            }
+        }
+
+
+        function updateMarkerLocation2(dropoffMarker, location) {
+            var latlng;
+            if (location) {
+                latlng = L.latLng(location.split(','));
+            } else {
+                latlng = dropoffMarker.getLatLng();
+            }
+            var lat = latlng.lat;
+            var lng = latlng.lng;
+
+            var url = new URL(window.location.href);
+            url.searchParams.set('dropoff', lat + ',' + lng);
+            url.searchParams.set('driver', document.getElementById("driver").value); // Add the driver to the URL parameters
+
+            fetch("https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=" + lat + "&lon=" + lng)
+                .then(function(response) {
+                    return response.json();
+                })
+                .then(function(json) {
+                    var name = json.display_name;
+                    document.getElementById("dropoff").value = name;
+                    history.pushState(null, null, url.toString());
+                });
+
+            dropoffMarker.setLatLng(latlng);
+
+            if (url.searchParams.has('pickup') && url.searchParams.has('dropoff')) {
+                const pickupLatLng = L.latLng(url.searchParams.get('pickup').split(','));
+                marker.setLatLng(pickupLatLng);
+
+                routingControl.setWaypoints([pickupLatLng, latlng]);
+            }
+        }
+
+
+        marker.on("moveend", function(event) {
+            updateMarkerLocation(event.target);
+        });
+        dropoffMarker.on("moveend", function(event) {
+            updateMarkerLocation2(event.target);
+        });
+
+        function updateMarkerLocation(marker, location) {
+            var latlng;
+            if (location) {
+                latlng = L.latLng(location.split(','));
+            } else {
+                latlng = marker.getLatLng();
+            }
+            var lat = latlng.lat;
+            var lng = latlng.lng;
+
+            var url = new URL(window.location.href);
+            url.searchParams.set('pickup', lat + ',' + lng);
+            url.searchParams.set('driver', document.getElementById("driver").value);
+
+            fetch("https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=" + lat + "&lon=" + lng)
+                .then(function(response) {
+                    return response.json();
+                })
+                .then(function(json) {
+                    var name = json.display_name;
+                    document.getElementById("pickup").value = name;
+                    history.pushState(null, null, url.toString());
+                });
+
+            marker.setLatLng(latlng);
+
+            if (url.searchParams.has('pickup') && url.searchParams.has('dropoff')) {
+                const dropoffLatLng = L.latLng(url.searchParams.get('dropoff').split(','));
+                dropoffMarker.setLatLng(dropoffLatLng);
+
+                routingControl.setWaypoints([latlng, dropoffLatLng]);
+            }
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    var latlng = L.latLng(position.coords.latitude, position.coords.longitude);
+                    // userMarker.setLatLng(latlng);
+                    mymap.setView(latlng, 16);
+                }, function(error) {
+                    console.error(error);
+                });
+            } else {
+                console.error('Geolocation is not supported by this browser.');
+            }
         }
 
         function updateMarkerLocation2(dropoffMarker, location) {
-            var latlng = dropoffMarker.getLatLng();
+            var latlng;
+            if (location) {
+                latlng = L.latLng(location.split(','));
+            } else {
+                latlng = dropoffMarker.getLatLng();
+            }
             var lat = latlng.lat;
             var lng = latlng.lng;
 
@@ -147,31 +284,34 @@
                     document.getElementById("dropoff").value = name;
                     history.pushState(null, null, url.toString());
                 });
-            if (pickup && dropoff) {
-                const pickupLatLng = L.latLng(pickup.split(','));
-                const dropoffLatLng = L.latLng(dropoff.split(','));
 
+            dropoffMarker.setLatLng(latlng);
+
+            if (url.searchParams.has('pickup') && url.searchParams.has('dropoff')) {
+                const pickupLatLng = L.latLng(url.searchParams.get('pickup').split(','));
                 marker.setLatLng(pickupLatLng);
-                dropoffMarker.setLatLng(dropoffLatLng);
 
-                routingControl.setWaypoints([pickupLatLng, dropoffLatLng]);
+                routingControl.setWaypoints([pickupLatLng, latlng]);
             }
-
         }
+        var driverMarker;
+        driverMarker = L.marker([-1.9550957139944252, 30.096697180904407], {
+            draggable: false,
+            icon: L.icon({
+                iconUrl: 'driver-icon.png',
+                iconSize: [38, 38],
+                iconAnchor: [19, 19],
+                popupAnchor: [0, -10]
+            })
+        }).addTo(mymap);
 
-        marker.on("moveend", function(event) {
-            updateMarkerLocation(event.target);
-        });
-        dropoffMarker.on("moveend", function(event) {
-            updateMarkerLocation2(event.target);
-        });
 
         updateMarkerLocation(marker);
         updateMarkerLocation2(dropoffMarker);
         var socket = io();
         socket.on('location', function(location) {
             console.log('Received location update:', location);
-            document.getElementById('latitude').value = location.latitude;
+            driverMarker.setLatLng([location.latitude, location.longitude]);
         });
     </script>
 
